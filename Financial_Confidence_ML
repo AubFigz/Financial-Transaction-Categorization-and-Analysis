@@ -1,0 +1,121 @@
+import sqlite3
+import pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+import joblib
+
+class FinancialConfidenceML:
+    """Financial Confidence Machine Learning class for transaction categorization."""
+
+    def __init__(self, db_file):
+        """
+        Initialize FinancialConfidenceML object.
+
+        Parameters:
+        - db_file (str): Path to the SQLite database file.
+        """
+        self.db_file = db_file
+        self.conn = None
+
+    def connect_to_database(self):
+        """Connect to the SQLite database."""
+        try:
+            self.conn = sqlite3.connect(self.db_file)
+            print("Connected to the database successfully!")
+        except sqlite3.Error as e:
+            print(f"Error connecting to the database: {e}")
+
+    def disconnect_from_database(self):
+        """Disconnect from the SQLite database."""
+        if self.conn:
+            self.conn.close()
+            print("Disconnected from the database.")
+
+    def get_transaction_data(self):
+        """Retrieve transaction data from the database."""
+        query = "SELECT Category, Description FROM Transactions;"
+        try:
+            df = pd.read_sql_query(query, self.conn)
+            return df
+        except pd.DatabaseError as e:
+            print(f"Error retrieving transaction data: {e}")
+            return None
+
+    def preprocess_data(self, df):
+        """Preprocess transaction data for machine learning."""
+        df['Description'] = df['Description'].str.lower()  # Convert description to lowercase
+        df['Description'] = df['Description'].str.replace('[^\w\s]', '')  # Remove punctuation
+        return df
+
+    def train_model(self, X_train, y_train):
+        """Train a random forest classifier model."""
+        pipeline = Pipeline([
+            ('tfidf', TfidfVectorizer()),
+            ('clf', RandomForestClassifier(random_state=42))
+        ])
+
+        # Hyperparameter tuning using GridSearchCV
+        param_grid = {
+            'tfidf__max_features': [1000, 2000, 3000],
+            'clf__n_estimators': [100, 200, 300],
+            'clf__max_depth': [None, 10, 20]
+        }
+
+        grid_search = GridSearchCV(pipeline, param_grid, cv=5, n_jobs=-1)
+        grid_search.fit(X_train, y_train)
+        return grid_search
+
+    def evaluate_model(self, clf, X_test, y_test):
+        """Evaluate the trained model."""
+        y_pred = clf.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        report = classification_report(y_test, y_pred)
+        return accuracy, report
+
+    def save_model(self, clf, model_file):
+        """Save the trained model to a file."""
+        try:
+            joblib.dump(clf, model_file)
+            print(f"Model saved to {model_file}")
+        except Exception as e:
+            print(f"Error saving model: {e}")
+
+# Main program
+if __name__ == "__main__":
+    # Initialize FinancialConfidenceML object
+    financial_ml = FinancialConfidenceML("financial_data.db")
+
+    # Connect to the database
+    financial_ml.connect_to_database()
+
+    # Retrieve transaction data
+    transaction_data = financial_ml.get_transaction_data()
+    if transaction_data is not None:
+        # Preprocess data
+        preprocessed_data = financial_ml.preprocess_data(transaction_data)
+
+        # Split data into features (X) and target (y)
+        X = preprocessed_data['Description']
+        y = preprocessed_data['Category']
+
+        # Split data into training and testing sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Train the machine learning model
+        clf = financial_ml.train_model(X_train, y_train)
+
+        # Evaluate the model
+        accuracy, report = financial_ml.evaluate_model(clf, X_test, y_test)
+        print("Model Evaluation:")
+        print(f"Accuracy: {accuracy}")
+        print("Classification Report:")
+        print(report)
+
+        # Save the trained model
+        financial_ml.save_model(clf, "financial_ml_model.pkl")
+
+    # Disconnect from the database
+    financial_ml.disconnect_from_database()
