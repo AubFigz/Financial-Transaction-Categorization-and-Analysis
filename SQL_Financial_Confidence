@@ -1,0 +1,138 @@
+-- Table: Users
+CREATE TABLE Users (
+    UserID INT PRIMARY KEY,
+    FirstName VARCHAR(50),
+    LastName VARCHAR(50),
+    Email VARCHAR(100),
+    RegistrationDate DATE
+);
+
+-- Table: Transactions
+CREATE TABLE Transactions (
+    TransactionID INT PRIMARY KEY,
+    UserID INT,
+    TransactionDate DATE,
+    Amount DECIMAL(12, 2),
+    Category VARCHAR(50),
+    Description VARCHAR(255),
+    FOREIGN KEY (UserID) REFERENCES Users(UserID)
+);
+
+-- Table: Categories
+CREATE TABLE Categories (
+    CategoryID INT PRIMARY KEY,
+    CategoryName VARCHAR(50)
+);
+
+-- Total number of users registered
+SELECT COUNT(*) AS TotalUsers
+FROM Users;
+
+-- Total number of transactions recorded
+SELECT COUNT(*) AS TotalTransactions
+FROM Transactions;
+
+-- Total transaction amount for each category
+SELECT 
+    c.CategoryName,
+    SUM(t.Amount) AS TotalAmount
+FROM Transactions t
+JOIN Categories c ON t.Category = c.CategoryName
+GROUP BY c.CategoryName
+ORDER BY TotalAmount DESC;
+
+-- Average transaction amount by month
+SELECT 
+    YEAR(TransactionDate) AS Year,
+    MONTH(TransactionDate) AS Month,
+    AVG(Amount) AS AverageAmount
+FROM Transactions
+GROUP BY Year, Month
+ORDER BY Year, Month;
+
+-- Identify top-spending users
+SELECT 
+    u.UserID,
+    u.FirstName,
+    u.LastName,
+    SUM(t.Amount) AS TotalSpent
+FROM Users u
+JOIN Transactions t ON u.UserID = t.UserID
+GROUP BY u.UserID, u.FirstName, u.LastName
+ORDER BY TotalSpent DESC
+LIMIT 10;
+
+-- Monthly spending trend for a specific user
+SELECT 
+    YEAR(TransactionDate) AS Year,
+    MONTH(TransactionDate) AS Month,
+    SUM(Amount) AS TotalSpent
+FROM Transactions
+WHERE UserID = 123 -- Replace with the specific UserID
+GROUP BY Year, Month
+ORDER BY Year, Month;
+
+-- Monthly income vs. spending trend for all users
+SELECT 
+    YEAR(t.TransactionDate) AS Year,
+    MONTH(t.TransactionDate) AS Month,
+    SUM(CASE WHEN t.Category = 'Income' THEN t.Amount ELSE 0 END) AS TotalIncome,
+    SUM(CASE WHEN t.Category != 'Income' THEN t.Amount ELSE 0 END) AS TotalSpending
+FROM Transactions t
+GROUP BY Year, Month
+ORDER BY Year, Month;
+
+-- Calculate the percentage of income spent for each user
+SELECT 
+    u.UserID,
+    u.FirstName,
+    u.LastName,
+    SUM(CASE WHEN t.Category != 'Income' THEN t.Amount ELSE 0 END) / SUM(CASE WHEN t.Category = 'Income' THEN t.Amount ELSE 1 END) * 100 AS PercentIncomeSpent
+FROM Users u
+JOIN Transactions t ON u.UserID = t.UserID
+GROUP BY u.UserID, u.FirstName, u.LastName
+ORDER BY PercentIncomeSpent DESC;
+
+-- Identify users with irregular spending patterns
+SELECT 
+    u.UserID,
+    u.FirstName,
+    u.LastName,
+    CASE 
+        WHEN COUNT(DISTINCT t.TransactionDate) < 30 THEN 'Irregular Spender'
+        ELSE 'Regular Spender'
+    END AS SpendingPattern
+FROM Users u
+JOIN Transactions t ON u.UserID = t.UserID
+GROUP BY u.UserID, u.FirstName, u.LastName
+ORDER BY SpendingPattern;
+
+-- Calculate the average transaction amount for each category
+SELECT 
+    c.CategoryName,
+    AVG(t.Amount) AS AverageAmount
+FROM Transactions t
+JOIN Categories c ON t.Category = c.CategoryName
+GROUP BY c.CategoryName
+ORDER BY AverageAmount DESC;
+
+-- Identify users with high transaction volatility (standard deviation of transaction amounts)
+SELECT 
+    u.UserID,
+    u.FirstName,
+    u.LastName,
+    STDDEV(t.Amount) AS TransactionVolatility
+FROM Users u
+JOIN Transactions t ON u.UserID = t.UserID
+GROUP BY u.UserID, u.FirstName, u.LastName
+HAVING TransactionVolatility > 100 -- Adjust threshold as needed
+ORDER BY TransactionVolatility DESC;
+
+-- Identify common transaction patterns (e.g., recurring expenses)
+SELECT 
+    Description,
+    COUNT(*) AS Frequency
+FROM Transactions
+GROUP BY Description
+ORDER BY Frequency DESC
+LIMIT 10;
